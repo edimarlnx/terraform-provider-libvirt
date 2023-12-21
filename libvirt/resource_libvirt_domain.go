@@ -70,6 +70,12 @@ func resourceLibvirtDomain() *schema.Resource {
 				Default:  defaultDomainMemoryMiB,
 				ForceNew: true,
 			},
+			"current_memory": {
+				Type:     schema.TypeInt,
+				Optional: true,
+				Default:  defaultDomainMemoryMiB,
+				ForceNew: false,
+			},
 			"firmware": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -181,6 +187,10 @@ func resourceLibvirtDomain() *schema.Resource {
 							Optional: true,
 						},
 						"block_device": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"cache": {
 							Type:     schema.TypeString,
 							Optional: true,
 						},
@@ -502,6 +512,17 @@ func resourceLibvirtDomainCreate(ctx context.Context, d *schema.ResourceData, me
 	domainDef.Memory = &libvirtxml.DomainMemory{
 		Value: uint(d.Get("memory").(int)),
 		Unit:  "MiB",
+	}
+	if currentMemory, ok := d.GetOk("current_memory"); ok && currentMemory != "" {
+		domainDef.CurrentMemory = &libvirtxml.DomainCurrentMemory{
+			Value: uint(currentMemory.(int)),
+			Unit:  "MiB",
+		}
+	} else {
+		domainDef.CurrentMemory = &libvirtxml.DomainCurrentMemory{
+			Value: uint(d.Get("memory").(int)),
+			Unit:  "MiB",
+		}
 	}
 	domainDef.VCPU = &libvirtxml.DomainVCPU{
 		Value: uint(d.Get("vcpu").(int)),
@@ -831,6 +852,14 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 	default:
 		return diag.Errorf("invalid memory unit : %s", domainDef.Memory.Unit)
 	}
+	switch domainDef.CurrentMemory.Unit {
+	case "KiB":
+		d.Set("current_memory", domainDef.CurrentMemory.Value/1024)
+	case "MiB":
+		d.Set("current_memory", domainDef.CurrentMemory.Value)
+	default:
+		return diag.Errorf("invalid current_memory unit : %s", domainDef.CurrentMemory.Unit)
+	}
 
 	if domainDef.OS.Loader != nil {
 		d.Set("firmware", domainDef.OS.Loader.Path)
@@ -952,6 +981,10 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 			disk["wwn"] = diskDef.WWN
 		} else {
 			disk["scsi"] = false
+		}
+
+		if diskDef.Driver.Cache != "" {
+			disk["cache"] = diskDef.Driver.Cache
 		}
 
 		disks = append(disks, disk)

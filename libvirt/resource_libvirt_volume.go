@@ -60,6 +60,11 @@ func resourceLibvirtVolume() *schema.Resource {
 				Optional: true,
 				ForceNew: true,
 			},
+			"cache": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
 			"xml": {
 				Type:     schema.TypeList,
 				Optional: true,
