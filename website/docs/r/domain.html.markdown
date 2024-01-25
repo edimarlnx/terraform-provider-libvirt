@@ -34,6 +34,8 @@ The following arguments are supported:
   will be created.
 * `memory` - (Optional) The amount of memory in MiB. If not specified the domain
   will be created with 512 MiB of memory be used.
+* `max_memory` - (Optional) The max amount of memory in MiB. If not specified the domain
+  will be created with same value of `memory`.
 * `running` - (Optional) Use `false` to turn off the instance. If not specified,
   true is assumed and the instance, if stopped, will be started at next apply.
 * `disk` - (Optional) An array of one or more disks to attach to the domain. The
@@ -248,6 +250,7 @@ While `volume_id`, `url`, `file` and `block_device` are optional, it is intended
 model is set to `virtio-scsi`
 * `wwn` - (Optional) Specify a WWN to use for the disk if the disk is using
 a scsi controller, if not specified then a random wwn is generated for the disk
+* `cache` - (Optional) Cache mode for the disk
 
 
 ```hcl
