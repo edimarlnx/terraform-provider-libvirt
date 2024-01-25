@@ -68,13 +68,13 @@ func resourceLibvirtDomain() *schema.Resource {
 				Type:     schema.TypeInt,
 				Optional: true,
 				Default:  defaultDomainMemoryMiB,
-				ForceNew: true,
+				ForceNew: false,
 			},
-			"current_memory": {
+			"max_memory": {
 				Type:     schema.TypeInt,
 				Optional: true,
 				Default:  defaultDomainMemoryMiB,
-				ForceNew: false,
+				ForceNew: true,
 			},
 			"firmware": {
 				Type:     schema.TypeString,
@@ -509,17 +509,17 @@ func resourceLibvirtDomainCreate(ctx context.Context, d *schema.ResourceData, me
 		}
 	}
 
-	domainDef.Memory = &libvirtxml.DomainMemory{
+	domainDef.CurrentMemory = &libvirtxml.DomainCurrentMemory{
 		Value: uint(d.Get("memory").(int)),
 		Unit:  "MiB",
 	}
-	if currentMemory, ok := d.GetOk("current_memory"); ok && currentMemory != "" {
-		domainDef.CurrentMemory = &libvirtxml.DomainCurrentMemory{
-			Value: uint(currentMemory.(int)),
+	if maxMemory, ok := d.GetOk("max_memory"); ok && maxMemory != "" {
+		domainDef.Memory = &libvirtxml.DomainMemory{
+			Value: uint(maxMemory.(int)),
 			Unit:  "MiB",
 		}
 	} else {
-		domainDef.CurrentMemory = &libvirtxml.DomainCurrentMemory{
+		domainDef.Memory = &libvirtxml.DomainMemory{
 			Value: uint(d.Get("memory").(int)),
 			Unit:  "MiB",
 		}
@@ -752,6 +752,14 @@ func resourceLibvirtDomainUpdate(ctx context.Context, d *schema.ResourceData, me
 		}
 	}
 
+	if d.HasChange("memory") {
+		memory := uint64(d.Get("memory").(int) * 1024)
+		err = virConn.DomainSetMemory(domain, memory)
+		if err != nil {
+			return diag.Errorf("error change memory: %s", err)
+		}
+	}
+
 	netIfacesCount := d.Get("network_interface.#").(int)
 
 	for i := 0; i < netIfacesCount; i++ {
@@ -844,21 +852,21 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 	d.Set("description", domainDef.Description)
 	d.Set("vcpu", domainDef.VCPU.Value)
 
-	switch domainDef.Memory.Unit {
-	case "KiB":
-		d.Set("memory", domainDef.Memory.Value/1024)
-	case "MiB":
-		d.Set("memory", domainDef.Memory.Value)
-	default:
-		return diag.Errorf("invalid memory unit : %s", domainDef.Memory.Unit)
-	}
 	switch domainDef.CurrentMemory.Unit {
 	case "KiB":
-		d.Set("current_memory", domainDef.CurrentMemory.Value/1024)
+		d.Set("memory", domainDef.CurrentMemory.Value/1024)
 	case "MiB":
-		d.Set("current_memory", domainDef.CurrentMemory.Value)
+		d.Set("memory", domainDef.CurrentMemory.Value)
 	default:
-		return diag.Errorf("invalid current_memory unit : %s", domainDef.CurrentMemory.Unit)
+		return diag.Errorf("invalid memory unit : %s", domainDef.CurrentMemory.Unit)
+	}
+	switch domainDef.Memory.Unit {
+	case "KiB":
+		d.Set("max_memory", domainDef.Memory.Value/1024)
+	case "MiB":
+		d.Set("max_memory", domainDef.Memory.Value)
+	default:
+		return diag.Errorf("invalid max_memory unit : %s", domainDef.Memory.Unit)
 	}
 
 	if domainDef.OS.Loader != nil {
