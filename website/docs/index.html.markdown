@@ -54,6 +54,11 @@ The following keys can be used to configure the provider.
 * `uri` - (Required) The [connection URI](https://libvirt.org/uri.html) used
   to connect to the libvirt host.
 
+### Custom parameters for SSH
+
+* `SSHControlPath` - The [SSH control path](https://man.openbsd.org/ssh_config#ControlPath) is used to reuse previous SSH connections, such as an SSH Gateway or SSH with MFA enabled.
+* Ex.: `qemu+ssh://root@192.168.1.100/system?SSHControlPath=~/.ssh/ssh-gateway.socket&sshauth=agent` 
+
 ## Environment variables
 
 The libvirt connection URI can also be specified with the `LIBVIRT_DEFAULT_URI`
