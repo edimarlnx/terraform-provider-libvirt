@@ -3,8 +3,10 @@ package uri
 import (
 	"fmt"
 	"github.com/trzsz/trzsz-ssh/tssh"
+	"golang.org/x/net/proxy"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"os/user"
 	"strings"
@@ -146,7 +148,7 @@ func (u *ConnectionURI) dialSSH() (net.Conn, error) {
 
 	sshClient, err := u.sshClient(cfg)
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 
 	address := q.Get("socket")
@@ -165,35 +167,63 @@ func (u *ConnectionURI) dialSSH() (net.Conn, error) {
 func (u *ConnectionURI) sshClient(cfg ssh.ClientConfig) (*ssh.Client, error) {
 	q := u.Query()
 	sshControlPath := q.Get("SSHControlPath")
+	proxyURI := proxyByEnvVar()
 	port := u.Port()
 	if port == "" {
 		port = defaultSSHPort
 	}
-	if sshControlPath == "" {
+	if sshControlPath == "" && proxyURI == "" {
 		return ssh.Dial("tcp", fmt.Sprintf("%s:%s", u.Hostname(), port), &cfg)
 	}
-	sshControlPath = os.ExpandEnv(strings.Replace(sshControlPath, "~", "$HOME", 1))
-	_, err := os.Stat(sshControlPath)
-	if err != nil || os.IsNotExist(err) {
-		return nil, err
+	var proxyConn net.Conn
+	if sshControlPath != "" {
+		sshControlPath = os.ExpandEnv(strings.Replace(sshControlPath, "~", "$HOME", 1))
+		_, err := os.Stat(sshControlPath)
+		if err != nil || os.IsNotExist(err) {
+			return nil, err
+		}
+		controlSocketConn, err := net.Dial("unix", sshControlPath)
+		if err != nil {
+			return nil, err
+		}
+		controlConn, chans, reqs, err := tssh.NewControlClientConn(controlSocketConn)
+		if err != nil {
+			return nil, err
+		}
+		sshControlClient := ssh.NewClient(controlConn, chans, reqs)
+		sshControlClientConn, err := sshControlClient.Dial("tcp", fmt.Sprintf("%s:%s", u.Hostname(), port))
+		if err != nil {
+			return nil, err
+		}
+		proxyConn = sshControlClientConn
+	} else {
+		parsedProxyURI, err := url.Parse(proxyURI)
+		if err != nil || os.IsNotExist(err) {
+			return nil, err
+		}
+		dialer, err := proxy.SOCKS5(parsedProxyURI.Scheme, parsedProxyURI.Host, nil, proxy.Direct)
+		if err != nil {
+			return nil, err
+		}
+		socketConn, err := dialer.Dial("tcp", u.Host)
+		if err != nil {
+			return nil, err
+		}
+		proxyConn = socketConn
 	}
-	controlSocketConn, err := net.Dial("unix", sshControlPath)
-	if err != nil {
-		return nil, err
-	}
-	controlConn, chans, reqs, err := tssh.NewControlClientConn(controlSocketConn)
-	if err != nil {
-		return nil, err
-	}
-	sshControlClient := ssh.NewClient(controlConn, chans, reqs)
-	sshControlClientConn, err := sshControlClient.Dial("tcp", fmt.Sprintf("%s:%s", u.Hostname(), port))
-	if err != nil {
-		return nil, err
-	}
-	ncc, chans, reqs, err := ssh.NewClientConn(sshControlClientConn, fmt.Sprintf("%s:%s", u.Hostname(), port), &cfg)
-	if err != nil {
-		return nil, err
-	}
-	return ssh.NewClient(ncc, chans, reqs), nil
 
+	ncc, chans, reqs, err := ssh.NewClientConn(proxyConn, fmt.Sprintf("%s:%s", u.Hostname(), port), &cfg)
+	if err != nil {
+		return nil, err
+	}
+	cli := ssh.NewClient(ncc, chans, reqs)
+	return cli, nil
+}
+
+func proxyByEnvVar() string {
+	proxyURL := os.Getenv("HTTP_PROXY")
+	if proxyURL != "" {
+		return proxyURL
+	}
+	return os.Getenv("ALL_PROXY")
 }
