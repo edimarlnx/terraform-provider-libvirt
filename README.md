@@ -1,5 +1,7 @@
 # Terraform provider for libvirt
 
+Forked from [dmacvicar/terraform-provider-libvirt](https://github.com/dmacvicar/terraform-provider-libvirt) version v0.7.6
+
 - [![Gitter chat](https://badges.gitter.im/terraform-provider-libvirt/Lobby.png)](https://gitter.im/terraform-provider-libvirt/Lobby) ([IRC gateway](https://irc.gitter.im/))
 - Planning board: [Github Projects](https://github.com/dmacvicar/terraform-provider-libvirt/projects/1)
 
@@ -34,7 +36,7 @@ In your `main.tf` file, specify the version you want to use:
 terraform {
   required_providers {
     libvirt = {
-      source = "dmacvicar/libvirt"
+      source = "zcloud-ws/libvirt"
     }
   }
 }
